@@ -1,0 +1,29 @@
+
+%token<int> INT
+%token LB
+%token RB
+%token ADD MUL
+
+%left ADD
+%left MUL
+
+%start e
+
+%%
+
+e<expr>:
+	| e ADD t {}
+	| t {}
+;
+
+t<expr2>:
+	| t MUL f {}
+	| f {}
+;
+
+
+f<expr3>:
+	| LB e RB {}
+	| INT {}
+;
+
