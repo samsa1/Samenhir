@@ -12,3 +12,10 @@ build:
 
 exec:
 	./samenhir $(PARSER)
+
+time:
+	time ./samenhir parser.sam
+	time ocamlopt parser.mli parser.ml -o parser
+
+clean:
+	@rm -f parser parser.mli parser.ml
