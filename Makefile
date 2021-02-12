@@ -19,3 +19,12 @@ time:
 
 clean:
 	@rm -f parser parser.mli parser.ml
+	@rm -f _build/*
+	@rm -f *.cmi *.o *.cmx samenhirParserBuilder samenhirParser.ml samenhirParser.mli samenhirLexer.ml
+	
+cleanall: clean
+	@rm -f samenhir
+
+rust: build
+	./samenhir -l rust -no-main parser.sam
+	

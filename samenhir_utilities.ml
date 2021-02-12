@@ -12,6 +12,7 @@
 (* Le début vient du TD 6 sur l'analyse descendente, l'algorithme utilisé si dessous est l'algorithme de Knuth *)
 let print_all = ref false
 let explain = ref false
+let no_main = ref false
 let endString = "Not_a_token"
 
 open Lexing
@@ -547,7 +548,7 @@ type actionTypes =
 	|Success
 ";;
 
-let pp_tokenDecl fmt liste = 
+let pp_ocaml_tokenDecl fmt liste = 
 	Format.fprintf fmt "type token =\n";
 	Format.fprintf fmt "\t|Not_a_token\n";
 	let afficheToken (t,dataT) = match dataT with 
@@ -750,7 +751,7 @@ let pp_gotoStates2 fmt i gotoT ruleMap =
 (* affiche tout le programme *)
 let pp_buildProg fmt program = 
 	pp_header fmt program.head;
-	Format.fprintf fmt "\n\n%a\n%a\n" pp_tokenDecl program.tokenList pp_declarationTypes program;
+	Format.fprintf fmt "\n\n%a\n%a\n" pp_ocaml_tokenDecl program.tokenList pp_declarationTypes program;
 	let tokenTypeMap = List.fold_left (fun m (t,dT) -> if dT = None then m else Tmap.add t dT m) Tmap.empty program.tokenList in
 	let rMap = List.fold_left (fun m (nm,tipe, rawProd, opt, cons) -> Rmap.add (nm,unRawProd rawProd, opt) (rawProd,cons) m) Rmap.empty program.gR.raw_rules in
 	Imap.iter (fun i act -> if Tmap.cardinal act > 0 then pp_actionStates fmt program.gR.startR i act rMap tokenTypeMap (if Imap.mem i program.gotoTab then Imap.find i program.gotoTab else Ntmap.empty)) program.actionTab;
@@ -762,7 +763,7 @@ let pp_buildProg fmt program =
 
 let pp_main fmt program = 
 	pp_header fmt program.head;
-	Format.fprintf fmt "\n\n%a\n%a\n" pp_tokenDecl program.tokenList pp_declarationTypes program;
+	Format.fprintf fmt "\n\n%a\n%a\n" pp_ocaml_tokenDecl program.tokenList pp_declarationTypes program;
 	let tokenTypeMap = List.fold_left (fun m (t,dT) -> if dT = None then m else Tmap.add t dT m) Tmap.empty program.tokenList in
 	let rMap = List.fold_left (fun m (nm,tipe, rawProd, opt, cons) -> Rmap.add (nm,unRawProd rawProd, opt) (rawProd,cons) m) Rmap.empty program.gR.raw_rules in
 	pp_action_table fmt program.actionTab rMap tokenTypeMap;
@@ -778,8 +779,174 @@ let pp_main fmt program =
 
 (* affiche le fichier .mli*)
 let pp_mli fmt program =
-	pp_tokenDecl fmt program.tokenList;
+	pp_ocaml_tokenDecl fmt program.tokenList;
 	Format.fprintf fmt "\nexception Samenhir_Parsing_Error of string list\n";
 	Format.fprintf fmt "val %s: (Lexing.lexbuf -> token) -> Lexing.lexbuf -> (%s)\n" program.gR.startR (findType program.gR.startR program.gR.raw_rules)
+;;
+
+
+let pp_rust_header fmt program = 
+	Format.fprintf fmt "%s\n\n" program.head;
+	Format.fprintf fmt "pub enum SamenhirOutput {
+	Parsed(%s),
+	SamenhirError,
+}\n\n" (findType program.gR.startR program.gR.raw_rules)
+;;
+
+let pp_rust_tokenDecl fmt liste = 
+	Format.fprintf fmt "#[derive(Clone,Copy)]\npub enum Token {\n";
+	Format.fprintf fmt "\tNotAToken,\n";
+	let afficheToken (t, dataT) = match dataT with
+		|None -> Format.fprintf fmt "\t%s,\n" t
+		|Some data -> Format.fprintf fmt "\t%s(%s),\n" t data
+	in List.iter afficheToken liste;
+	Format.fprintf fmt "}\n"
+;;
+
+let pp_rust_typeDecl fmt raw_rules = 
+	Format.fprintf fmt "enum RulesType {\n";
+	let nameMap = List.fold_left (fun set (nm,t,_,_,_) -> Smap.add nm t set) Smap.empty raw_rules in 
+	Smap.iter (fun nm t -> Format.fprintf fmt "\t%s(%s),\n" (String.uppercase_ascii nm) t) nameMap;
+	Format.fprintf fmt "\tTok(Token),\n}\n";
+	Format.fprintf fmt "enum ReturnReduce {\n\tSamenhirErrorReduce,\n\tSuccess(Vec<usize>, Vec<RulesType>, &'static str),\n}\n";
+	Format.fprintf fmt "
+#[allow(dead_code)]
+enum ActionTypes {
+	Action(usize),
+	Shift(usize),
+	Success,
+	Failure,
+}\n";;
+;;
+
+let pp_rust_action_affiche fmt num t action rMap tokenTypeMap = 
+	let t2 = if t = endString then "EOF" else t in
+	if Tmap.mem t tokenTypeMap then
+		Format.fprintf fmt "\t\t(%i, Token::%s(_)) => " num t2
+	else Format.fprintf fmt "\t\t(%i, Token::%s) => " num t2;
+	match action with
+		| SUCCESS -> Format.fprintf fmt "ActionTypes::Success,\n"
+		| SHIFT i -> Format.fprintf fmt "ActionTypes::Shift(%i),\n" i
+		| REDUCE r -> begin
+			if Hashtbl.mem hash r then
+				let (i, _) = Hashtbl.find hash r in Format.fprintf fmt "ActionTypes::Action(%i),\n" i
+			else begin
+				let i = !compteurReduce in 
+				compteurReduce := i +1;
+				let red = Rmap.find r rMap in
+				Hashtbl.add hash r (i, red);
+				Format.fprintf fmt "ActionTypes::Action(%i),\n" i
+			end
+		end
+;;
+let pp_rust_action_table fmt actTab rMap tokenType =
+	Format.fprintf fmt "fn action_table(state : usize ,next_token : Token) -> ActionTypes {\n";
+	Format.fprintf fmt "\tmatch (state, next_token) {\n";
+	Imap.iter (fun i -> Tmap.iter (fun n act -> pp_rust_action_affiche fmt i n act rMap tokenType)) actTab;
+	Format.fprintf fmt "\t\t _ => ActionTypes::Failure\n\t}\n}\n\n"
+;;
+
+let pp_rust_reduce_action fmt tokenTypeMap (n,_,_) (num, (raw_prod, cons) : int * (SamenhirAst.raw_production * string)) =
+	let rec aux1 = function 
+			| [] -> ()
+			|TerminalR t::tl -> begin 
+				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n";
+				aux1 tl
+				end
+			|AssocTerminal (s, t)::tl -> begin 
+				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::Tok(Token::%s(t))) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s t;
+				aux1 tl
+				end
+			|NonTerminalR t::tl -> begin 
+				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => return ReturnReduce::SamenhirErrorReduce, Some(_) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n";
+				aux1 tl
+				end
+			|AssocNonTerminal (s,t)::tl -> begin 
+				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::%s(t)) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s (String.uppercase_ascii t);
+				aux1 tl
+				end
+	in
+	Format.fprintf fmt "\t\t%i => {\n" num;
+	aux1 raw_prod;
+	Format.fprintf fmt "\t\t\tfor _i in 0..%i {match list_etat.pop() { Some(_) => (), _ => return ReturnReduce::SamenhirErrorReduce}};\n" (List.length raw_prod);
+	Format.fprintf fmt "\t\t\tpile.push(RulesType::%s(%s));\n\t\t\tReturnReduce::Success(list_etat, pile, \"%s\")\n\t\t}\n" (String.uppercase_ascii n) cons n
+;;
+let pp_rust_reduce_table fmt tokenTypeMap =
+	Format.fprintf fmt "fn reduce(num:usize, mut list_etat: Vec<usize>, mut pile: Vec<RulesType>) -> ReturnReduce {\n";
+	Format.fprintf fmt "\tmatch num {\n";
+	Hashtbl.iter (pp_rust_reduce_action fmt tokenTypeMap) hash;
+	Format.fprintf fmt "\t_ => ReturnReduce::SamenhirErrorReduce\n\t}\n}\n\n"
+;;
+
+let pp_rust_mainGoto fmt i t target = 
+	Format.fprintf fmt "\t\t(%i, \"%s\") => %i,\n" i t target
+;;
+
+let pp_rust_gotoStates fmt i gotoTable rMap =
+	Ntmap.iter (pp_rust_mainGoto fmt i) gotoTable;;
+let pp_rust_mainProgram fmt startR startLTable programType = Format.fprintf fmt "
+fn action_all(new_token : fn () -> Token, mut pile : Vec<RulesType>, mut liste_etats : Vec<usize>, mut etat : usize) -> SamenhirOutput {
+  let mut next_token = new_token();
+	loop {
+		match action_table(etat, next_token) {
+			ActionTypes::Success => return SamenhirOutput::SamenhirError,
+			ActionTypes::Action(i) => {
+				liste_etats.push(etat);
+				let s = reduce(i, liste_etats, pile);
+				let nom = match s {
+					ReturnReduce::SamenhirErrorReduce => return SamenhirOutput::SamenhirError,
+					ReturnReduce::Success(e, p, n) => {
+						pile = p;
+						liste_etats = e;
+						n
+						}
+					};
+				let l2 = liste_etats.len();
+				let i = goto(liste_etats[l2-1], nom);
+				if i == -1 {
+					if pile.len() != 1 {
+						return SamenhirOutput::SamenhirError
+					}
+					match pile[0] {
+						RulesType::%s(t) => return SamenhirOutput::Parsed(t),
+						_ => return SamenhirOutput::SamenhirError
+					}
+				}
+				etat = i as usize;
+				},
+			ActionTypes::Shift(i) => {
+				liste_etats.push(etat);
+				pile.push(RulesType::Tok(next_token));
+				etat = i;
+				next_token = new_token();
+				},
+			ActionTypes::Failure => return SamenhirOutput::SamenhirError
+		}
+	}
+}
+
+pub fn %s(lexer : fn () -> Token) -> SamenhirOutput {
+	action_all(lexer, Vec::new(), Vec::new(), %i)
+}\n" (String.uppercase_ascii startR) startR startLTable;
+	if !no_main then () else Format.fprintf fmt "fn wierd() -> Token {
+		Token::NotAToken
+	}
+	
+	fn main() { loop {}; %s(wierd); }\n" startR;;
+
+let pp_rust_main fmt program = 
+		pp_rust_header fmt program;
+		pp_rust_tokenDecl fmt program.tokenList;
+		pp_rust_typeDecl fmt program.gR.raw_rules;
+		Format.fprintf fmt "\n\n";
+		let tokenTypeMap = List.fold_left (fun m (t,dT) -> if dT = None then m else Tmap.add t dT m) Tmap.empty program.tokenList in
+		let rMap = List.fold_left (fun m (nm,tipe, rawProd, opt, cons) -> Rmap.add (nm,unRawProd rawProd, opt) (rawProd,cons) m) Rmap.empty program.gR.raw_rules in
+		pp_rust_action_table fmt program.actionTab rMap tokenTypeMap;
+		pp_rust_reduce_table fmt tokenTypeMap;
+		Format.fprintf fmt "fn goto(i : usize, read_rule : &str) -> isize {\n\tmatch (i, read_rule) {\n";
+		Imap.iter (fun i got ->if Ntmap.cardinal got > 0 then pp_rust_gotoStates fmt i got rMap) program.gotoTab;
+		Format.fprintf fmt "\t\t_ => -1\n\t}\n}\n";
+		pp_rust_mainProgram fmt program.gR.startR program.startLTable (findType program.gR.startR program.gR.raw_rules);
+		Format.pp_print_flush fmt ()
 ;;
 
