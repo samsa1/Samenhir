@@ -13,6 +13,7 @@
 	open SamenhirParser
 	open SamenhirAst	
 
+  let code_buffer = Buffer.create 1024
 
 }
 
@@ -30,7 +31,7 @@ rule token = parse
 	| "<" (chaineType* as c) ">" { TYPE c}
 	| "=" {ASSOC}
 	| "%{" (chaineCode* as c) "%}" { HEADER c}
-	| "{" (chaineCode* as c) "}" { CODE c}
+	| "{" {let _ = code lexbuf in let s = Buffer.contents code_buffer in Buffer.reset code_buffer; CODE s}
 	| notTerm as nt { N_TERM_IDENT nt}
 	| term as t {TERM t}
 	| ":" {POINTS}
@@ -51,3 +52,12 @@ rule token = parse
 and comment = parse 
 	| "*/" {token lexbuf}
 	| _ {comment lexbuf}
+and code = parse
+	| '}' { CODE ""}
+	| '{' {
+		Buffer.add_char code_buffer '{';
+		let _ = code lexbuf in
+		Buffer.add_char code_buffer '}';
+		code lexbuf
+	}
+	| _ as c {Buffer.add_char code_buffer c; code lexbuf}
