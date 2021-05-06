@@ -886,52 +886,50 @@ let pp_rust_gotoStates fmt i gotoTable rMap =
 ;;
 
 let pp_rust_mainProgram fmt startR startLTable programType = Format.fprintf fmt "
-fn action_all(new_token : fn () -> Result<Token, &'static str>, mut pile : Vec<RulesType>, mut liste_etats : Vec<usize>, mut etat : usize) -> Result<%s, Errors> {
-    match new_token() {
-    	Ok(mut next_token) => {
-			loop {
-				match action_table(etat, &next_token) {
-					ActionTypes::Success => return Err(Errors::ParsingError),
-					ActionTypes::Action(i) => {
-						liste_etats.push(etat);
-						let s = reduce(i, liste_etats, pile);
-						let nom = match s {
-							ReturnReduce::SamenhirErrorReduce => return Err(Errors::ParsingError),
-							ReturnReduce::Success(e, p, n) => {
-								pile = p;
-								liste_etats = e;
-								n
-								}
-							};
-						let l2 = liste_etats.len();
-						let i = goto(liste_etats[l2-1], nom);
-						if i == -1 {
-							if pile.len() != 1 {
-								return Err(Errors::ParsingError)
-							}
-							match pile[0] {
-								RulesType::%s(t) => return Ok(t),
-								_ => return Err(Errors::ParsingError)
-							}
+fn action_all(new_token : fn () -> Result<Token, &'static str>, mut etat : usize) -> Result<%s, Errors> {
+    let mut pile = Vec::<RulesType>::new();
+    let mut liste_etats = Vec::<usize>::new();
+    let mut next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
+	loop {
+		match action_table(etat, &next_token) {
+			ActionTypes::Success => return Err(Errors::ParsingError),
+			ActionTypes::Action(i) => {
+				liste_etats.push(etat);
+				let s = reduce(i, liste_etats, pile);
+				let nom = match s {
+					ReturnReduce::SamenhirErrorReduce => return Err(Errors::ParsingError),
+					ReturnReduce::Success(e, p, n) => {
+						pile = p;
+						liste_etats = e;
+						n
 						}
-						etat = i as usize;
-						},
-					ActionTypes::Shift(i) => {
-						liste_etats.push(etat);
-						pile.push(RulesType::Tok(next_token));
-						etat = i;
-						next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
-						},
-					ActionTypes::Failure => return Err(Errors::ParsingError)
+					};
+				let l2 = liste_etats.len();
+				let i = goto(liste_etats[l2-1], nom);
+				if i == -1 {
+					if pile.len() != 1 {
+						return Err(Errors::ParsingError)
+					}
+					match pile.swap_remove(0) {
+						RulesType::%s(t) => return Ok(t),
+						_ => return Err(Errors::ParsingError)
+					}
 				}
-			}
-		},
-		Err(s) => Err(Errors::LexingError(s))
+				etat = i as usize;
+				},
+			ActionTypes::Shift(i) => {
+				liste_etats.push(etat);
+				pile.push(RulesType::Tok(next_token));
+				etat = i;
+				next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
+				},
+			ActionTypes::Failure => return Err(Errors::ParsingError)
+		}
 	}
 }
 
 pub fn %s(lexer : fn () -> Result<Token, &'static str>) -> Result<%s, Errors> {
-	action_all(lexer, Vec::new(), Vec::new(), %i)
+	action_all(lexer, %i)
 }\n" programType (String.uppercase_ascii startR) startR programType startLTable;
 	if !include_main then Format.fprintf fmt "fn wierd() -> Result<Token, &'static str> {
 		Err(\"No error\")
