@@ -1,3 +1,5 @@
 
 samenhir
 _build/*
+.DS_Store
+*.rs

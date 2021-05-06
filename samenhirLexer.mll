@@ -24,7 +24,7 @@ let maj = ['A'-'Z']
 let min = ['a'-'z']
 let term = (maj)(alpha | chiffre)*
 let notTerm = (min)(alpha | chiffre)*
-let chaineCode = [^'}']
+let chaineCode = [^'%']
 let chaineType = [^'>']
 let space = " " | "\t"
 rule token = parse 
@@ -60,4 +60,5 @@ and code = parse
 		Buffer.add_char code_buffer '}';
 		code lexbuf
 	}
+	| '\n' {Buffer.add_char code_buffer '\n'; new_line lexbuf; code lexbuf}
 	| _ as c {Buffer.add_char code_buffer c; code lexbuf}

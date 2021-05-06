@@ -3,7 +3,7 @@ val print_all : bool ref
 
 val explain : bool ref
 
-val no_main : bool ref
+val include_main : bool ref
 
 val unrawGrammar : SamenhirAst.grammar_raw -> SamenhirAst.grammar
 

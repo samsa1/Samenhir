@@ -12,7 +12,7 @@
 (* Le début vient du TD 6 sur l'analyse descendente, l'algorithme utilisé si dessous est l'algorithme de Knuth *)
 let print_all = ref false
 let explain = ref false
-let no_main = ref false
+let include_main = ref false
 let endString = "Not_a_token"
 
 open Lexing
@@ -787,14 +787,13 @@ let pp_mli fmt program =
 
 let pp_rust_header fmt program = 
 	Format.fprintf fmt "%s\n\n" program.head;
-	Format.fprintf fmt "pub enum SamenhirOutput {
-	Parsed(%s),
-	SamenhirError,
-}\n\n" (findType program.gR.startR program.gR.raw_rules)
-;;
+	Format.fprintf fmt "pub enum Errors {
+	ParsingError,
+	LexingError(&'static str),
+}\n\n";;
 
 let pp_rust_tokenDecl fmt liste = 
-	Format.fprintf fmt "#[derive(Clone,Copy)]\npub enum Token {\n";
+	Format.fprintf fmt "pub enum Token {\n";
 	Format.fprintf fmt "\tNotAToken,\n";
 	let afficheToken (t, dataT) = match dataT with
 		|None -> Format.fprintf fmt "\t%s,\n" t
@@ -840,7 +839,7 @@ let pp_rust_action_affiche fmt num t action rMap tokenTypeMap =
 		end
 ;;
 let pp_rust_action_table fmt actTab rMap tokenType =
-	Format.fprintf fmt "fn action_table(state : usize ,next_token : Token) -> ActionTypes {\n";
+	Format.fprintf fmt "fn action_table(state : usize ,next_token : &Token) -> ActionTypes {\n";
 	Format.fprintf fmt "\tmatch (state, next_token) {\n";
 	Imap.iter (fun i -> Tmap.iter (fun n act -> pp_rust_action_affiche fmt i n act rMap tokenType)) actTab;
 	Format.fprintf fmt "\t\t _ => ActionTypes::Failure\n\t}\n}\n\n"
@@ -869,7 +868,7 @@ let pp_rust_reduce_action fmt tokenTypeMap (n,_,_) (num, (raw_prod, cons) : int 
 	Format.fprintf fmt "\t\t%i => {\n" num;
 	aux1 raw_prod;
 	Format.fprintf fmt "\t\t\tfor _i in 0..%i {match list_etat.pop() { Some(_) => (), _ => return ReturnReduce::SamenhirErrorReduce}};\n" (List.length raw_prod);
-	Format.fprintf fmt "\t\t\tpile.push(RulesType::%s(%s));\n\t\t\tReturnReduce::Success(list_etat, pile, \"%s\")\n\t\t}\n" (String.uppercase_ascii n) cons n
+	Format.fprintf fmt "\t\t\tpile.push(RulesType::%s({%s}));\n\t\t\tReturnReduce::Success(list_etat, pile, \"%s\")\n\t\t}\n" (String.uppercase_ascii n) cons n
 ;;
 let pp_rust_reduce_table fmt tokenTypeMap =
 	Format.fprintf fmt "fn reduce(num:usize, mut list_etat: Vec<usize>, mut pile: Vec<RulesType>) -> ReturnReduce {\n";
@@ -883,56 +882,63 @@ let pp_rust_mainGoto fmt i t target =
 ;;
 
 let pp_rust_gotoStates fmt i gotoTable rMap =
-	Ntmap.iter (pp_rust_mainGoto fmt i) gotoTable;;
+	Ntmap.iter (pp_rust_mainGoto fmt i) gotoTable
+;;
+
 let pp_rust_mainProgram fmt startR startLTable programType = Format.fprintf fmt "
-fn action_all(new_token : fn () -> Token, mut pile : Vec<RulesType>, mut liste_etats : Vec<usize>, mut etat : usize) -> SamenhirOutput {
-  let mut next_token = new_token();
-	loop {
-		match action_table(etat, next_token) {
-			ActionTypes::Success => return SamenhirOutput::SamenhirError,
-			ActionTypes::Action(i) => {
-				liste_etats.push(etat);
-				let s = reduce(i, liste_etats, pile);
-				let nom = match s {
-					ReturnReduce::SamenhirErrorReduce => return SamenhirOutput::SamenhirError,
-					ReturnReduce::Success(e, p, n) => {
-						pile = p;
-						liste_etats = e;
-						n
+fn action_all(new_token : fn () -> Result<Token, &'static str>, mut pile : Vec<RulesType>, mut liste_etats : Vec<usize>, mut etat : usize) -> Result<%s, Errors> {
+    match new_token() {
+    	Ok(mut next_token) => {
+			loop {
+				match action_table(etat, &next_token) {
+					ActionTypes::Success => return Err(Errors::ParsingError),
+					ActionTypes::Action(i) => {
+						liste_etats.push(etat);
+						let s = reduce(i, liste_etats, pile);
+						let nom = match s {
+							ReturnReduce::SamenhirErrorReduce => return Err(Errors::ParsingError),
+							ReturnReduce::Success(e, p, n) => {
+								pile = p;
+								liste_etats = e;
+								n
+								}
+							};
+						let l2 = liste_etats.len();
+						let i = goto(liste_etats[l2-1], nom);
+						if i == -1 {
+							if pile.len() != 1 {
+								return Err(Errors::ParsingError)
+							}
+							match pile[0] {
+								RulesType::%s(t) => return Ok(t),
+								_ => return Err(Errors::ParsingError)
+							}
 						}
-					};
-				let l2 = liste_etats.len();
-				let i = goto(liste_etats[l2-1], nom);
-				if i == -1 {
-					if pile.len() != 1 {
-						return SamenhirOutput::SamenhirError
-					}
-					match pile[0] {
-						RulesType::%s(t) => return SamenhirOutput::Parsed(t),
-						_ => return SamenhirOutput::SamenhirError
-					}
+						etat = i as usize;
+						},
+					ActionTypes::Shift(i) => {
+						liste_etats.push(etat);
+						pile.push(RulesType::Tok(next_token));
+						etat = i;
+						next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
+						},
+					ActionTypes::Failure => return Err(Errors::ParsingError)
 				}
-				etat = i as usize;
-				},
-			ActionTypes::Shift(i) => {
-				liste_etats.push(etat);
-				pile.push(RulesType::Tok(next_token));
-				etat = i;
-				next_token = new_token();
-				},
-			ActionTypes::Failure => return SamenhirOutput::SamenhirError
-		}
+			}
+		},
+		Err(s) => Err(Errors::LexingError(s))
 	}
 }
 
-pub fn %s(lexer : fn () -> Token) -> SamenhirOutput {
+pub fn %s(lexer : fn () -> Result<Token, &'static str>) -> Result<%s, Errors> {
 	action_all(lexer, Vec::new(), Vec::new(), %i)
-}\n" (String.uppercase_ascii startR) startR startLTable;
-	if !no_main then () else Format.fprintf fmt "fn wierd() -> Token {
-		Token::NotAToken
+}\n" programType (String.uppercase_ascii startR) startR programType startLTable;
+	if !include_main then Format.fprintf fmt "fn wierd() -> Result<Token, &'static str> {
+		Err(\"No error\")
 	}
 	
-	fn main() { loop {}; %s(wierd); }\n" startR;;
+	fn main() { loop {}; %s(wierd);}\n" startR
+;;
 
 let pp_rust_main fmt program = 
 		pp_rust_header fmt program;
