@@ -15,5 +15,5 @@ val pp_main: Format.formatter -> SamenhirAst.program -> unit
 
 val pp_mli : Format.formatter -> SamenhirAst.program -> unit
 
-val pp_rust_main : Format.formatter -> SamenhirAst.program -> unit
+val pp_rust_main : Format.formatter -> SamenhirAst.program -> string -> unit
 

@@ -885,11 +885,11 @@ let pp_rust_gotoStates fmt i gotoTable rMap =
 	Ntmap.iter (pp_rust_mainGoto fmt i) gotoTable
 ;;
 
-let pp_rust_mainProgram fmt startR startLTable programType = Format.fprintf fmt "
-fn action_all(new_token : fn () -> Result<Token, &'static str>, mut etat : usize) -> Result<%s, Errors> {
+let pp_rust_mainProgram fmt startR startLTable programType lexerName = Format.fprintf fmt "
+fn action_all(new_token : fn (%s) -> Result<Token, &'static str>, mut lexbuf : %s, mut etat : usize) -> Result<%s, Errors> {
     let mut pile = Vec::<RulesType>::new();
     let mut liste_etats = Vec::<usize>::new();
-    let mut next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
+    let mut next_token = match new_token(lexbuf) {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
 	loop {
 		match action_table(etat, &next_token) {
 			ActionTypes::Success => return Err(Errors::ParsingError),
@@ -921,16 +921,17 @@ fn action_all(new_token : fn () -> Result<Token, &'static str>, mut etat : usize
 				liste_etats.push(etat);
 				pile.push(RulesType::Tok(next_token));
 				etat = i;
-				next_token = match new_token() {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
+				next_token = match new_token(lexbuf) {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
 				},
 			ActionTypes::Failure => return Err(Errors::ParsingError)
 		}
 	}
 }
 
-pub fn %s(lexer : fn () -> Result<Token, &'static str>) -> Result<%s, Errors> {
-	action_all(lexer, %i)
-}\n" programType (String.uppercase_ascii startR) startR programType startLTable;
+pub fn %s(lexer : fn (%s) -> Result<Token, &'static str>, mut lexbuf : %s) -> Result<%s, Errors> {
+	action_all(lexer, lexbuf, %i)
+}\n" lexerName lexerName programType (String.uppercase_ascii startR) startR lexerName lexerName programType startLTable;
+	
 	if !include_main then Format.fprintf fmt "fn wierd() -> Result<Token, &'static str> {
 		Err(\"No error\")
 	}
@@ -938,7 +939,7 @@ pub fn %s(lexer : fn () -> Result<Token, &'static str>) -> Result<%s, Errors> {
 	fn main() { loop {}; %s(wierd);}\n" startR
 ;;
 
-let pp_rust_main fmt program = 
+let pp_rust_main fmt program lexerName = 
 		pp_rust_header fmt program;
 		pp_rust_tokenDecl fmt program.tokenList;
 		pp_rust_typeDecl fmt program.gR.raw_rules;
@@ -950,7 +951,7 @@ let pp_rust_main fmt program =
 		Format.fprintf fmt "fn goto(i : usize, read_rule : &str) -> isize {\n\tmatch (i, read_rule) {\n";
 		Imap.iter (fun i got ->if Ntmap.cardinal got > 0 then pp_rust_gotoStates fmt i got rMap) program.gotoTab;
 		Format.fprintf fmt "\t\t_ => -1\n\t}\n}\n";
-		pp_rust_mainProgram fmt program.gR.startR program.startLTable (findType program.gR.startR program.gR.raw_rules);
+		pp_rust_mainProgram fmt program.gR.startR program.startLTable (findType program.gR.startR program.gR.raw_rules) lexerName;
 		Format.pp_print_flush fmt ()
 ;;
 

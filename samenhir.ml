@@ -16,6 +16,8 @@ let file = ref "";;
 let v2 = ref false;;
 let language = ref "ocaml";;
 
+let lexer = ref "super::lexer";;
+
 type lang =
 	| OCaml
 	| Rust
@@ -33,7 +35,8 @@ let main () =
 	"-print", Arg.Set Samenhir_utilities.print_all, "show info to debug Samenhir";
 	"-v2", Arg.Set v2, "use v2 version for OCaml only";
 	"-l", Arg.Set_string language, "set language";
-	"-include-main", Arg.Set Samenhir_utilities.include_main, "add main function for rust"]
+	"-include-main", Arg.Set Samenhir_utilities.include_main, "add main function for rust";
+	"-lexer", Arg.Set_string lexer, "choose lexer name for rust"]
 	in
 	Arg.parse spectlist (fun f -> file := f) "";
 	if !file = "" then
@@ -69,7 +72,8 @@ let main () =
 					let debut_nom = Filename.chop_suffix !file ".sam" in
 					let outfile = debut_nom ^ ".rs" in
 					let out = open_out outfile in
-					let _ = Samenhir_utilities.pp_rust_main (Format.formatter_of_out_channel out) p in
+					let lexerName = "&"^(!lexer)^"::Lexbuf" in
+					let _ = Samenhir_utilities.pp_rust_main (Format.formatter_of_out_channel out) p lexerName in
 					close_out out
 					end
 		end
