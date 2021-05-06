@@ -578,7 +578,7 @@ let pp_mainEnd fmt fin startS =
 		|%s a -> a
 		| _ -> assert false
 	with Output a -> a
-		| _ -> raise (Samenhir_Parsing_Error [\"Try something else\"])
+		(*| _ -> raise (Samenhir_Parsing_Error [\"Try something else\"])*)
 " fin startS startS (String.uppercase_ascii fin);;
 
 (* affichage des actions de réduction *)
