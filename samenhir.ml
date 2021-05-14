@@ -72,7 +72,7 @@ let main () =
 					let debut_nom = Filename.chop_suffix !file ".sam" in
 					let outfile = debut_nom ^ ".rs" in
 					let out = open_out outfile in
-					let lexerName = "&"^(!lexer)^"::Lexbuf" in
+					let lexerName = "&mut "^(!lexer)^"::Lexbuf" in
 					let _ = Samenhir_utilities.pp_rust_main (Format.formatter_of_out_channel out) p lexerName in
 					close_out out
 					end

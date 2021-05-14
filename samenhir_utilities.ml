@@ -886,7 +886,7 @@ let pp_rust_gotoStates fmt i gotoTable rMap =
 ;;
 
 let pp_rust_mainProgram fmt startR startLTable programType lexerName = Format.fprintf fmt "
-fn action_all(new_token : fn (%s) -> Result<Token, &'static str>, mut lexbuf : %s, mut etat : usize) -> Result<%s, Errors> {
+fn action_all(new_token : fn (%s) -> Result<Token, &'static str>, lexbuf : %s, mut etat : usize) -> Result<%s, Errors> {
     let mut pile = Vec::<RulesType>::new();
     let mut liste_etats = Vec::<usize>::new();
     let mut next_token = match new_token(lexbuf) {Ok(t) => t, Err(s) => return Err(Errors::LexingError(s))};
@@ -928,7 +928,7 @@ fn action_all(new_token : fn (%s) -> Result<Token, &'static str>, mut lexbuf : %
 	}
 }
 
-pub fn %s(lexer : fn (%s) -> Result<Token, &'static str>, mut lexbuf : %s) -> Result<%s, Errors> {
+pub fn %s(lexer : fn (%s) -> Result<Token, &'static str>, lexbuf : %s) -> Result<%s, Errors> {
 	action_all(lexer, lexbuf, %i)
 }\n" lexerName lexerName programType (String.uppercase_ascii startR) startR lexerName lexerName programType startLTable;
 	
