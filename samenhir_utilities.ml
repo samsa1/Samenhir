@@ -849,20 +849,20 @@ let pp_rust_reduce_action fmt tokenTypeMap (n,_,_) (num, (raw_prod, cons) : int 
 	let rec aux1 = function 
 			| [] -> ()
 			|TerminalR t::tl -> begin 
-				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n";
-				aux1 tl
+				aux1 tl;
+				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n"
 				end
 			|AssocTerminal (s, t)::tl -> begin 
-				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::Tok(Token::%s(t))) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s t;
-				aux1 tl
+				aux1 tl;
+				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::Tok(Token::%s(t))) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s t
 				end
 			|NonTerminalR t::tl -> begin 
-				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => return ReturnReduce::SamenhirErrorReduce, Some(_) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n";
-				aux1 tl
+				aux1 tl;
+				Format.fprintf fmt "\t\t\tmatch pile.pop() { Some(RulesType::Tok(_)) => return ReturnReduce::SamenhirErrorReduce, Some(_) => (), _ => return ReturnReduce::SamenhirErrorReduce};\n"
 				end
 			|AssocNonTerminal (s,t)::tl -> begin 
-				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::%s(t)) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s (String.uppercase_ascii t);
-				aux1 tl
+				aux1 tl;
+				Format.fprintf fmt "\t\t\tlet %s = match pile.pop() { Some(RulesType::%s(t)) => t, _ => return ReturnReduce::SamenhirErrorReduce};\n" s (String.uppercase_ascii t)
 				end
 	in
 	Format.fprintf fmt "\t\t%i => {\n" num;
