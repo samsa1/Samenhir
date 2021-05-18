@@ -19,3 +19,4 @@ Contributions are welcomed.
 
 * A compilator: https://github.com/Sup3Legacy/Petit-Julia-2020,
 * A shell in an OS: https://github.com/Sup3Legacy/FerrOS-project,
+* A lexer generator: https://github.com/samsa1/Ferrolex
