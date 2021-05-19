@@ -2,7 +2,7 @@
 Parser = parser.sam
 
 all:build
-	@echo "Everything builded !"
+	@echo "Everything built!"
 build:
 	@ocamlopt samenhirAst.ml samenhir_utilities.mli samenhir_utilities.ml samenhirParserBuilder.ml -o samenhirParserBuilder
 	@./samenhirParserBuilder
