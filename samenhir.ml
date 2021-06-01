@@ -47,7 +47,8 @@ let main () =
 	"-l", Arg.Set_string language, "set language";
 	"-include-main", Arg.Set Samenhir_utilities.include_main, "add main function for rust";
 	"-lexer", Arg.Set_string lexer, "choose lexer name for rust";
-	"-o", Arg.Set_string outfile, "select output name"]
+	"-o", Arg.Set_string outfile, "select output name";
+	"-trace-time", Arg.Set Samenhir_utilities.trace_time, "enable timer"]
 	in
 	Arg.parse spectlist (fun f -> file := f) "";
 	if !file = "" then
@@ -57,6 +58,7 @@ let main () =
 		else begin
 			let f = open_in !file in
 			let buf = Lexing.from_channel f in
+			let t_start_parse = Unix.gettimeofday () in
 			let parsed = try SamenhirParser.program SamenhirLexer.token buf
 			with SamenhirParser.Samenhir_Parsing_Error _ -> (let e = Lexing.lexeme_end_p buf in
 				print_string "Parsing error line ";
@@ -65,9 +67,27 @@ let main () =
 				exit 1)
  in
 			let () = close_in f in
+			let t_end_parse = Unix.gettimeofday () in
+			if !Samenhir_utilities.trace_time then
+				begin
+					print_string "Parsed in ";
+					print_float (t_end_parse -. t_start_parse);
+					print_string "s";
+					print_newline ()
+				end;
+			let t_start_build_table = Unix.gettimeofday () in
 			let table = Samenhir_utilities.buildTable (Samenhir_utilities.unrawGrammar parsed.g) parsed.prio in
+			let t_end_build_table = Unix.gettimeofday () in
 			let p = {gR = parsed.g; startLTable = table.startLine; gotoTab = table.goto; actionTab = table.action; tokenList = parsed.tokenList; head = parsed.header} in
+			if !Samenhir_utilities.trace_time then
+				begin
+					print_string "Build table in ";
+					print_float (t_end_build_table -. t_start_build_table);
+					print_string "s";
+					print_newline ()
+				end;
 			outfile := get_output_file_name !outfile !file (convert_lang_name !language);
+			let t_start_print_file = Unix.gettimeofday () in
 			match convert_lang_name !language with 
 				| OCaml -> begin
 					if !Samenhir_utilities.include_main then print_string "WARNING : No main is not avialable for Ocaml\n";
@@ -84,7 +104,15 @@ let main () =
 					let lexerName = "&mut "^(!lexer)^"::Lexbuf" in
 					let _ = Samenhir_utilities.pp_rust_main (Format.formatter_of_out_channel out) p lexerName in
 					close_out out
-					end
+					end;
+			let t_end_print_file = Unix.gettimeofday () in
+			if !Samenhir_utilities.trace_time then
+				begin
+					print_string "Print file in ";
+					print_float (t_end_print_file -. t_start_print_file);
+					print_string "s";
+					print_newline ()
+				end;
 		end
 ;;
 

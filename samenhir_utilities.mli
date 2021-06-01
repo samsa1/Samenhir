@@ -5,6 +5,8 @@ val explain : bool ref
 
 val include_main : bool ref
 
+val trace_time: bool ref
+
 val unrawGrammar : SamenhirAst.grammar_raw -> SamenhirAst.grammar
 
 val buildTable : SamenhirAst.grammar -> SamenhirAst.priority -> SamenhirAst.parseTable
