@@ -1,5 +1,5 @@
 # Samenhir
-Multi-langual parser generator.
+Multi-lingual parser generator.
 
 ## Description
 
@@ -15,7 +15,7 @@ Feel free to ask for any additionnal language. Your request might be heard.
 
 Contributions are welcomed.
 
-## Applicatiobs
+## Applications
 
 * A compilator: https://github.com/Sup3Legacy/Petit-Julia-2020,
 * A shell in an OS: https://github.com/Sup3Legacy/FerrOS-project,
